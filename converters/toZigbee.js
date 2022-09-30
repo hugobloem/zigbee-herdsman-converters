@@ -582,7 +582,8 @@ const converters = {
             'ballast_physical_minimum_level',
             'ballast_physical_maximum_level',
             'ballast_minimum_level',
-            'ballast_maximum_level'],
+            'ballast_maximum_level',
+            'ballast_power_on_level'],
         // zcl attribute names are camel case, but we want to use snake case in the outside communication
         convertSet: async (entity, key, value, meta) => {
             if (key === 'ballast_config') {
@@ -598,6 +599,9 @@ const converters = {
             }
             if (key === 'ballast_maximum_level') {
                 await entity.write('lightingBallastCfg', {'maxLevel': value});
+            }
+            if (key === 'ballast_power_on_level') {
+                await entity.write('lightingBallastCfg', {'powerOnLevel': value});
             }
             converters.ballast_config.convertGet(entity, key, meta);
         },
@@ -1226,6 +1230,7 @@ const converters = {
                     Object.values(constants.thermostatProgrammingOperationModes).join(', '));
             }
             await entity.write('hvacThermostat', {programingOperMode: val});
+            return {state: {programming_operation_mode: value}};
         },
         convertGet: async (entity, key, meta) => {
             await entity.read('hvacThermostat', ['programingOperMode']);
@@ -1341,6 +1346,7 @@ const converters = {
             }
             const occupiedHeatingSetpoint = result;
             await entity.write('hvacThermostat', {occupiedHeatingSetpoint});
+            return {state: {occupied_heating_setpoint: value}};
         },
         convertGet: async (entity, key, meta) => {
             await entity.read('hvacThermostat', ['occupiedHeatingSetpoint']);
@@ -1375,6 +1381,7 @@ const converters = {
             }
             const occupiedCoolingSetpoint = result;
             await entity.write('hvacThermostat', {occupiedCoolingSetpoint});
+            return {state: {occupied_cooling_setpoint: value}};
         },
         convertGet: async (entity, key, meta) => {
             await entity.read('hvacThermostat', ['occupiedCoolingSetpoint']);
@@ -1427,6 +1434,7 @@ const converters = {
             }
             const minHeatSetpointLimit = result;
             await entity.write('hvacThermostat', {minHeatSetpointLimit});
+            return {state: {min_heat_setpoint_limit: value}};
         },
         convertGet: async (entity, key, meta) => {
             await entity.read('hvacThermostat', ['minHeatSetpointLimit']);
@@ -1443,9 +1451,44 @@ const converters = {
             }
             const maxHeatSetpointLimit = result;
             await entity.write('hvacThermostat', {maxHeatSetpointLimit});
+            return {state: {max_heat_setpoint_limit: value}};
         },
         convertGet: async (entity, key, meta) => {
             await entity.read('hvacThermostat', ['maxHeatSetpointLimit']);
+        },
+    },
+    thermostat_min_cool_setpoint_limit: {
+        key: ['min_cool_setpoint_limit'],
+        convertSet: async (entity, key, value, meta) => {
+            let result;
+            if (meta.options.thermostat_unit === 'fahrenheit') {
+                result = Math.round(utils.normalizeCelsiusVersionOfFahrenheit(value) * 100);
+            } else {
+                result = (Math.round((value * 2).toFixed(1)) / 2).toFixed(1) * 100;
+            }
+            const minCoolSetpointLimit = result;
+            await entity.write('hvacThermostat', {minCoolSetpointLimit});
+            return {state: {min_cool_setpoint_limit: value}};
+        },
+        convertGet: async (entity, key, meta) => {
+            await entity.read('hvacThermostat', ['minCoolSetpointLimit']);
+        },
+    },
+    thermostat_max_cool_setpoint_limit: {
+        key: ['max_cool_setpoint_limit'],
+        convertSet: async (entity, key, value, meta) => {
+            let result;
+            if (meta.options.thermostat_unit === 'fahrenheit') {
+                result = Math.round(utils.normalizeCelsiusVersionOfFahrenheit(value) * 100);
+            } else {
+                result = (Math.round((value * 2).toFixed(1)) / 2).toFixed(1) * 100;
+            }
+            const maxCoolSetpointLimit = result;
+            await entity.write('hvacThermostat', {maxCoolSetpointLimit});
+            return {state: {max_cool_setpoint_limit: value}};
+        },
+        convertGet: async (entity, key, meta) => {
+            await entity.read('hvacThermostat', ['maxCoolSetpointLimit']);
         },
     },
     thermostat_ac_louver_position: {
@@ -1508,6 +1551,12 @@ const converters = {
         key: ['temperature'],
         convertGet: async (entity, key, meta) => {
             await entity.read('msTemperatureMeasurement', ['measuredValue']);
+        },
+    },
+    illuminance: {
+        key: ['illuminance', 'illuminance_lux'],
+        convertGet: async (entity, key, meta) => {
+            await entity.read('msIlluminanceMeasurement', ['measuredValue']);
         },
     },
     // #endregion
@@ -3439,8 +3488,6 @@ const converters = {
                 if (value == 'ON') {
                     await tuya.sendDataPointBool(entity, tuya.dataPoints.tvHeatingStop, 1);
                 } else {
-                    await tuya.sendDataPointBool(entity, tuya.dataPoints.tvHeatingStop, 0);
-                    await utils.sleep(500);
                     await tuya.sendDataPointEnum(entity, tuya.dataPoints.tvMode, 1 /* manual */);
                 }
                 break;
@@ -3448,8 +3495,6 @@ const converters = {
                 if (value == 'ON') {
                     await tuya.sendDataPointBool(entity, tuya.dataPoints.tvFrostDetection, 1);
                 } else {
-                    await tuya.sendDataPointBool(entity, tuya.dataPoints.tvFrostDetection, 0);
-                    await utils.sleep(500);
                     await tuya.sendDataPointEnum(entity, tuya.dataPoints.tvMode, 1 /* manual */);
                 }
                 break;
@@ -4633,22 +4678,22 @@ const converters = {
             }
         },
     },
-    legrand_settingAlwaysEnableLed: {
+    legrand_settingEnableLedInDark: {
         // connected power outlet is on attribute 2 and not 1
-        key: ['led_when_off'],
+        key: ['led_in_dark'],
         convertSet: async (entity, key, value, meta) => {
             // enable or disable the LED (blue) when permitJoin=false (LED off)
             const enableLedIfOn = value === 'ON' || (value === 'OFF' ? false : !!value);
             const payload = {1: {value: enableLedIfOn, type: 16}};
             await entity.write('manuSpecificLegrandDevices', payload, manufacturerOptions.legrand);
-            return {state: {'led_when_off': value}};
+            return {state: {'led_in_dark': value}};
         },
         convertGet: async (entity, key, meta) => {
             await entity.read('manuSpecificLegrandDevices', [0x0001], manufacturerOptions.legrand);
         },
     },
     legrand_settingEnableLedIfOn: {
-        key: ['led_when_on'],
+        key: ['led_if_on'],
         convertSet: async (entity, key, value, meta) => {
             // enable the LED when the light object is "doing something"
             // on the light switch, the LED is on when the light is on,
@@ -4656,7 +4701,7 @@ const converters = {
             const enableLedIfOn = value === 'ON' || (value === 'OFF' ? false : !!value);
             const payload = {2: {value: enableLedIfOn, type: 16}};
             await entity.write('manuSpecificLegrandDevices', payload, manufacturerOptions.legrand);
-            return {state: {'led_when_on': value}};
+            return {state: {'led_if_on': value}};
         },
         convertGet: async (entity, key, meta) => {
             await entity.read('manuSpecificLegrandDevices', [0x0002], manufacturerOptions.legrand);

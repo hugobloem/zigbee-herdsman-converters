@@ -9,9 +9,9 @@ const e = exposes.presets;
 const ea = exposes.access;
 
 const fzLocal = {
-    // SPLZB-134 reports strange values sometimes
+    // SPLZB-134 and SPLZB-131 reports strange values sometimes
     // https://github.com/Koenkk/zigbee2mqtt/issues/13329
-    SPLZB134_electrical_measurement: {
+    develco_electrical_measurement: {
         ...fz.electrical_measurement,
         convert: (model, msg, publish, options, meta) => {
             if (msg.data.rmsVoltage !== 0xFFFF && msg.data.rmsCurrent !== 0xFFFF && msg.data.activePower !== -0x8000) {
@@ -19,7 +19,7 @@ const fzLocal = {
             }
         },
     },
-    SPLZB134_device_temperature: {
+    develco_device_temperature: {
         ...fz.device_temperature,
         convert: (model, msg, publish, options, meta) => {
             if (msg.data.currentTemperature !== -0x8000) {
@@ -27,7 +27,7 @@ const fzLocal = {
             }
         },
     },
-    SPLZB134_metering: {
+    develco_metering: {
         ...fz.metering,
         convert: (model, msg, publish, options, meta) => {
             if (msg.data.instantaneousDemand !== -0x800000) {
@@ -43,7 +43,7 @@ module.exports = [
         model: 'SPLZB-131',
         vendor: 'Develco',
         description: 'Power plug',
-        fromZigbee: [fz.on_off, fz.electrical_measurement, fz.metering],
+        fromZigbee: [fz.on_off, fzLocal.develco_electrical_measurement, fzLocal.develco_metering],
         toZigbee: [tz.on_off],
         exposes: [e.switch(), e.power(), e.current(), e.voltage(), e.energy()],
         configure: async (device, coordinatorEndpoint, logger) => {
@@ -94,7 +94,7 @@ module.exports = [
         model: 'SPLZB-134',
         vendor: 'Develco',
         description: 'Power plug (type G)',
-        fromZigbee: [fz.on_off, fzLocal.SPLZB134_electrical_measurement, fzLocal.SPLZB134_metering, fzLocal.SPLZB134_device_temperature],
+        fromZigbee: [fz.on_off, fzLocal.develco_electrical_measurement, fzLocal.develco_metering, fzLocal.develco_device_temperature],
         toZigbee: [tz.on_off],
         exposes: [e.switch(), e.power(), e.current(), e.voltage(), e.energy(), e.device_temperature()],
         configure: async (device, coordinatorEndpoint, logger) => {
@@ -144,7 +144,7 @@ module.exports = [
         model: 'EMIZB-132',
         vendor: 'Develco',
         description: 'Wattle AMS HAN power-meter sensor',
-        fromZigbee: [fz.metering, fz.electrical_measurement, fz.develco_fw],
+        fromZigbee: [fzLocal.develco_metering, fzLocal.develco_electrical_measurement, fz.develco_fw],
         toZigbee: [tz.EMIZB_132_mode],
         ota: ota.zigbeeOTA,
         configure: async (device, coordinatorEndpoint, logger) => {
@@ -290,16 +290,20 @@ module.exports = [
         model: 'MOSZB-140',
         vendor: 'Develco',
         description: 'Motion sensor',
-        fromZigbee: [fz.temperature, fz.illuminance, fz.ias_occupancy_alarm_1],
+        fromZigbee: [fz.temperature, fz.illuminance, fz.ias_occupancy_alarm_1, fz.battery],
         toZigbee: [],
-        exposes: [e.occupancy(), e.battery_low(), e.tamper(), e.temperature(), e.illuminance_lux()],
+        exposes: [e.occupancy(), e.battery(), e.battery_low(), e.tamper(), e.temperature(), e.illuminance_lux()],
+        meta: {battery: {voltageToPercentage: '3V_2500'}},
         configure: async (device, coordinatorEndpoint, logger) => {
-            const endpoint1 = device.getEndpoint(38);
-            await reporting.bind(endpoint1, coordinatorEndpoint, ['msTemperatureMeasurement']);
-            await reporting.temperature(endpoint1);
-            const endpoint2 = device.getEndpoint(39);
-            await reporting.bind(endpoint2, coordinatorEndpoint, ['msIlluminanceMeasurement']);
-            await reporting.illuminance(endpoint2);
+            const endpoint1 = device.getEndpoint(35);
+            await reporting.bind(endpoint1, coordinatorEndpoint, ['genPowerCfg']);
+            await reporting.batteryVoltage(endpoint1, {min: constants.repInterval.HOUR, max: 43200, change: 100});
+            const endpoint2 = device.getEndpoint(38);
+            await reporting.bind(endpoint2, coordinatorEndpoint, ['msTemperatureMeasurement']);
+            await reporting.temperature(endpoint2);
+            const endpoint3 = device.getEndpoint(39);
+            await reporting.bind(endpoint3, coordinatorEndpoint, ['msIlluminanceMeasurement']);
+            await reporting.illuminance(endpoint3);
         },
     },
     {

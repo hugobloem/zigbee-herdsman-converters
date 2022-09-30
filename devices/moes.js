@@ -416,6 +416,7 @@ module.exports = [
         model: 'MS-108ZR',
         vendor: 'Moes',
         description: 'Zigbee + RF curtain switch module',
+        meta: {coverInverted: true},
         fromZigbee: [fz.tuya_cover_options, fz.cover_position_tilt],
         toZigbee: [tz.cover_state, tz.moes_cover_calibration, tz.cover_position_tilt, tz.tuya_cover_reversal],
         exposes: [e.cover_position(), exposes.numeric('calibration_time', ea.ALL).withValueMin(0).withValueMax(100),
@@ -453,6 +454,26 @@ module.exports = [
             await reporting.bind(endpoint, coordinatorEndpoint, ['genPowerCfg']);
             await reporting.batteryPercentageRemaining(endpoint);
             await reporting.batteryVoltage(endpoint);
+        },
+    },
+    {
+        fingerprint: [{modelID: 'TS0011', manufacturerName: '_TZ3000_hhiodade'}],
+        model: 'ZS-EUB_1gang',
+        vendor: 'Moes',
+        description: 'Wall light switch (1 gang)',
+        toZigbee: extend.switch().toZigbee.concat([tz.moes_power_on_behavior, tz.tuya_switch_type, tz.tuya_backlight_mode]),
+        fromZigbee: extend.switch().fromZigbee.concat([fz.moes_power_on_behavior, fz.tuya_switch_type, fz.tuya_backlight_mode]),
+        exposes: [
+            e.switch(),
+            exposes.presets.power_on_behavior(),
+            exposes.presets.switch_type_2(),
+            exposes.enum('backlight_mode', ea.ALL, ['LOW', 'MEDIUM', 'HIGH'])
+                .withDescription('Indicator light status: LOW: Off | MEDIUM: On| HIGH: Inverted'),
+        ],
+        configure: async (device, coordinatorEndpoint, logger) => {
+            await reporting.bind(device.getEndpoint(1), coordinatorEndpoint, ['genOnOff']);
+            device.powerSource = 'Mains (single phase)';
+            device.save();
         },
     },
 ];

@@ -785,6 +785,20 @@ const converters = {
             }
         },
     },
+    on_off_force_multiendpoint: {
+        cluster: 'genOnOff',
+        type: ['attributeReport', 'readResponse'],
+        convert: (model, msg, publish, options, meta) => {
+            // This converted is need instead of `fz.on_off` when no meta: {multiEndpoint: true} can be defined for this device
+            // but it is needed for the `state`. E.g. when a switch has 3 channels (state_l1, state_l2, state_l3) but
+            // has combined power measurements (power, energy))
+            if (msg.data.hasOwnProperty('onOff')) {
+                const endpointName = model.hasOwnProperty('endpoint') ?
+                    utils.getKey(model.endpoint(meta.device), msg.endpoint.ID) : msg.endpoint.ID;
+                return {[`state_${endpointName}`]: msg.data['onOff'] === 1 ? 'ON' : 'OFF'};
+            }
+        },
+    },
     on_off_skip_duplicate_transaction: {
         cluster: 'genOnOff',
         type: ['attributeReport', 'readResponse'],
@@ -5119,7 +5133,7 @@ const converters = {
                 '105_14': 'press_2_and_3_and_4', '105_15': 'press_all', '105_16': 'press_energy_bar', '106_0': 'release',
             };
 
-            const ID = `${commandID}_${msg.data.commandFrame.raw.join('_')}`;
+            const ID = `${commandID}_${msg.data.commandFrame.raw.slice(0, 1).join('_')}`;
             if (!lookup.hasOwnProperty(ID)) {
                 meta.logger.error(`PTM 216Z: missing command '${ID}'`);
             } else {
@@ -8022,7 +8036,7 @@ const converters = {
                 const value = tuya.getDataValue(dpValue);
                 switch (dpValue.dp) {
                 case tuya.dataPoints.state:
-                    result.contact = Boolean(value);
+                    result.contact = !value;
                     break;
                 case tuya.dataPoints.thitBatteryPercentage:
                     result.battery = value;
@@ -8155,9 +8169,12 @@ const converters = {
         convert: (model, msg, publish, options, meta) => {
             const lookup = {'0': 'idle', '1': 'in', '2': 'out'};
             const value = precisionRound(parseFloat(msg.data['presentValue']), 1);
+            const people = precisionRound(msg.data.presentValue, 0);
             let result = null;
-            result = {people: precisionRound(msg.data.presentValue, 0), status: lookup[value*10%10]};
-            return result;
+            if (value <= 80) {
+                result = {people: people, status: lookup[value*10%10]};
+                return result;
+            }
         },
     },
     sihas_action: {
